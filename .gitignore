@@ -1,0 +1,39 @@
+# Environment variables - DO NOT COMMIT THIS FILE
+# This file contains sensitive information like API keys
+
+# Git ignore patterns
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Output files
+output/
+extracted_json/*.json
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+~$*
+*.docx_extracted.txt
+*_extracted.txt
+*_structured.json
