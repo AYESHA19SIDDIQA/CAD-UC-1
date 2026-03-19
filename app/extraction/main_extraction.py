@@ -185,6 +185,7 @@ def extract_from_word_doc(doc_path: str, output_dir: str = None):
         print(f"\n⚠️  Warning: Could not determine document requirements: {e}")
         import traceback
         traceback.print_exc()
+        
     
     print("\n" + "="*80)
     print("✅ EXTRACTION COMPLETE")
