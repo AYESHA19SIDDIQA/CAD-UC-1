@@ -1,23 +1,35 @@
 """
-LLM integration service - supports multiple LLM providers
+LLM integration service - supports multiple LLM providers including local models (Qwen, DeepSeek)
 """
 import json
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from openai import OpenAI
 import google.generativeai as genai
 from app.config import get_settings
 
+# For local models
+try:
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
+    print("Warning: transformers not installed. Local models will not be available.")
+
 class LLMService:
-    """Service for interacting with LLM APIs"""
-    
+    """Service for interacting with LLM APIs and local models"""
+
+    # Class-level cache for loaded local models
+    _loaded_models: Dict[str, Dict[str, Any]] = {}
+
     def __init__(self):
         settings = get_settings()
         self.settings = settings
         self.provider = settings.llm_provider
         self.client: Optional[OpenAI] = None
         self.gemini_client = None
-        
+
         if self.provider == "gemini":
             # Configure Gemini
             if not settings.validate_gemini_key():
@@ -30,13 +42,22 @@ class LLMService:
             self.temperature = settings.gemini_temperature
             self.max_tokens = settings.gemini_max_tokens
             self.gemini_client = genai.GenerativeModel(self.model)
-            
+
         elif self.provider in ["openai", "openrouter"]:
             # Configure OpenAI/OpenRouter defaults
             self.model = settings.openai_model
             self.temperature = settings.openai_temperature
             self.max_tokens = settings.openai_max_tokens
             self._ensure_openai_client()
+
+        elif self.provider == "local":
+            # For local models, no initial client; we'll load on demand
+            self.model = settings.local_model_name  # e.g., "Qwen/Qwen2.5-1.5B-Instruct"
+            self.temperature = settings.local_temperature
+            self.max_tokens = settings.local_max_tokens
+            if not TRANSFORMERS_AVAILABLE:
+                raise ImportError("transformers library is required for local models")
+
         else:
             raise ValueError(f"Unsupported LLM provider: {self.provider}")
 
@@ -72,6 +93,15 @@ class LLMService:
                 "provider": "openai_compatible",
                 "model": self.settings.qwen_small_model,
             },
+            # NEW: local profiles for CPU inference
+            "qwen_small_local": {
+                "provider": "local",
+                "model": "Qwen/Qwen2.5-1.5B-Instruct",  # you can override via settings
+            },
+            "deepseek_small_local": {
+                "provider": "local",
+                "model": "deepseek-ai/deepseek-coder-1.3b-instruct",
+            },
         }
         return profiles
 
@@ -82,15 +112,105 @@ class LLMService:
             available = ", ".join(profiles.keys())
             raise ValueError(f"Unknown model_profile '{model_profile}'. Available: {available}")
         return profiles[model_profile]
-    
+
+    # ========== Local model loading and inference ==========
+    def _load_local_model(self, model_name: str) -> Dict[str, Any]:
+        """Load a Hugging Face model and tokenizer, cache it, and return the model objects."""
+        if model_name in self._loaded_models:
+            return self._loaded_models[model_name]
+
+        print(f"Loading local model {model_name} for the first time (this may take a while)...")
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+            model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                torch_dtype=torch.float16,  # Use float32 for CPU
+                device_map="auto",
+                low_cpu_mem_usage=True,
+                trust_remote_code=True,
+            )
+            model.eval()
+        except Exception as e:
+            raise RuntimeError(f"Failed to load local model {model_name}: {e}")
+
+        # Cache
+        self._loaded_models[model_name] = {
+            "model": model,
+            "tokenizer": tokenizer,
+        }
+        print(f"Model {model_name} loaded successfully.")
+        return self._loaded_models[model_name]
+
+    def _generate_with_local(
+        self,
+        prompt: str,
+        model_name: str,
+        max_new_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+    ) -> str:
+        """Generate text using a local Hugging Face model."""
+        cached = self._load_local_model(model_name)
+        model = cached["model"]
+        tokenizer = cached["tokenizer"]
+
+        # Format prompt with chat template if needed
+        messages = [{"role": "user", "content": prompt}]
+        try:
+            # Attempt to apply chat template
+            formatted_prompt = tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+        except Exception:
+            # Fallback: just use raw prompt
+            formatted_prompt = prompt
+
+        inputs = tokenizer(formatted_prompt, return_tensors="pt").to(model.device)
+
+        # Move inputs to CPU (already on CPU)
+        with torch.no_grad():
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens or self.max_tokens,
+                temperature=temperature or self.temperature,
+                do_sample=True,
+                pad_token_id=tokenizer.eos_token_id,
+            )
+
+        generated = tokenizer.decode(outputs[0], skip_special_tokens=True)
+        # Remove the input prompt from the output
+        input_ids_length = inputs['input_ids'].shape[1]
+        generated_tokens = outputs[0][input_ids_length:]
+        response = tokenizer.decode(generated_tokens, skip_special_tokens=True).strip()
+        return response
+        
+    def _extract_with_local(self, prompt: str, model_name: str) -> Dict:
+        """Extract structured data using a local model."""
+        raw_output = self._generate_with_local(prompt, model_name)
+        return self._parse_json_from_output(raw_output)
+
+    # ========== Common JSON parsing ==========
+    def _parse_json_from_output(self, content: str) -> Dict:
+        """Extract JSON from LLM output, handling markdown code blocks."""
+        # Try to parse JSON from response
+        # Sometimes LLM wraps JSON in markdown code blocks
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0].strip()
+
+        # Parse JSON response
+        data = json.loads(content)
+        return data
+
+    # ========== Public extraction methods ==========
     def extract_structured_data(self, prompt: str, model_profile: str = "existing") -> Dict:
         """
         Extract structured data using LLM
-        
+
         Args:
             prompt: Prompt for the LLM
             model_profile: Which configured model profile to use
-            
+
         Returns:
             Extracted data as dictionary
         """
@@ -101,41 +221,36 @@ class LLMService:
 
             if provider == "gemini":
                 return self._extract_with_gemini(prompt)
-            return self._extract_with_openai(prompt, model_override=model)
-                
+            elif provider == "openai_compatible":
+                return self._extract_with_openai(prompt, model_override=model)
+            elif provider == "local":
+                return self._extract_with_local(prompt, model)
+            else:
+                raise ValueError(f"Unsupported provider: {provider}")
+
         except Exception as e:
             print(f"LLM extraction error ({model_profile}): {e}")
             return {}
-    
+
     def _extract_with_gemini(self, prompt: str) -> Dict:
         """Extract data using Gemini API"""
         generation_config = {
             "temperature": self.temperature,
             "max_output_tokens": self.max_tokens,
         }
-        
+
         full_prompt = f"""You are a helpful assistant that extracts structured data from documents. Always respond with valid JSON.
 
 {prompt}"""
-        
+
         response = self.gemini_client.generate_content(
             full_prompt,
             generation_config=generation_config
         )
-        
+
         content = response.text
-        
-        # Try to parse JSON from response
-        # Sometimes LLM wraps JSON in markdown code blocks
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0].strip()
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0].strip()
-        
-        # Parse JSON response
-        data = json.loads(content)
-        return data
-    
+        return self._parse_json_from_output(content)
+
     def _extract_with_openai(self, prompt: str, model_override: Optional[str] = None) -> Dict:
         """Extract data using OpenAI API"""
         client = self._ensure_openai_client()
@@ -148,20 +263,11 @@ class LLMService:
             temperature=self.temperature,
             max_tokens=self.max_tokens
         )
-        
+
         content = response.choices[0].message.content
-        
-        # Try to parse JSON from response
-        # Sometimes LLM wraps JSON in markdown code blocks
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0].strip()
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0].strip()
-        
-        # Parse JSON response
-        data = json.loads(content)
-        return data
-    
+        return self._parse_json_from_output(content)
+
+    # ========== Text generation ==========
     def generate_text(
         self,
         prompt: str,
@@ -171,13 +277,13 @@ class LLMService:
     ) -> str:
         """
         Generate text using LLM
-        
+
         Args:
             prompt: Prompt for text generation
             max_tokens: Maximum tokens to generate (uses config default if None)
             temperature: Temperature for generation (uses config default if None)
             model_profile: Which configured model profile to use
-            
+
         Returns:
             Generated text
         """
@@ -188,26 +294,31 @@ class LLMService:
 
             if provider == "gemini":
                 return self._generate_with_gemini(prompt, max_tokens, temperature)
-            return self._generate_with_openai(prompt, max_tokens, temperature, model_override=model)
-                
+            elif provider == "openai_compatible":
+                return self._generate_with_openai(prompt, max_tokens, temperature, model_override=model)
+            elif provider == "local":
+                return self._generate_with_local(prompt, model, max_new_tokens=max_tokens, temperature=temperature)
+            else:
+                raise ValueError(f"Unsupported provider: {provider}")
+
         except Exception as e:
             print(f"Text generation error ({model_profile}): {e}")
             return ""
-    
+
     def _generate_with_gemini(self, prompt: str, max_tokens: Optional[int] = None, temperature: Optional[float] = None) -> str:
         """Generate text using Gemini API"""
         generation_config = {
             "temperature": temperature or self.temperature,
             "max_output_tokens": max_tokens or self.max_tokens,
         }
-        
+
         response = self.gemini_client.generate_content(
             prompt,
             generation_config=generation_config
         )
-        
+
         return response.text
-    
+
     def _generate_with_openai(
         self,
         prompt: str,
@@ -225,9 +336,10 @@ class LLMService:
             max_tokens=max_tokens or self.max_tokens,
             temperature=temperature or self.temperature
         )
-        
+
         return response.choices[0].message.content
 
+    # ========== Benchmarking ==========
     def benchmark_profiles(
         self,
         prompt: str,
@@ -236,7 +348,7 @@ class LLMService:
         mode: str = "extract"
     ) -> List[Dict[str, Any]]:
         """Run repeatable side-by-side performance comparison across model profiles."""
-        selected_profiles = profiles or ["existing", "deepseek_small", "qwen_small"]
+        selected_profiles = profiles or ["existing", "deepseek_small", "qwen_small", "qwen_small_local", "deepseek_small_local"]
         results: List[Dict[str, Any]] = []
 
         for profile_name in selected_profiles:
@@ -256,7 +368,7 @@ class LLMService:
                         ok = bool(text and text.strip())
                     if ok:
                         success_count += 1
-                except Exception as exc:  # Defensive fallback if internal handlers change
+                except Exception as exc:
                     last_error = str(exc)
                 finally:
                     latencies.append(time.perf_counter() - start)

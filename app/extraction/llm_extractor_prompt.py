@@ -8,9 +8,10 @@ from app.schemas.sanction_schema import SanctionData
 
 class LLMExtractor:
     """Extract structured data from text using LLM"""
-    
-    def __init__(self):
+
+    def __init__(self, model_profile: str = "qwen_small_local"):
         self.llm_service = LLMService()
+        self.model_profile = model_profile
     
     def extract_sanction_data(self, text: str) -> SanctionData:
         """
@@ -23,23 +24,23 @@ class LLMExtractor:
             SanctionData object with extracted information
         """
         prompt = self._build_extraction_prompt(text)
-        extracted_data = self.llm_service.extract_structured_data(prompt)
-        
+        extracted_data = self.llm_service.extract_structured_data(prompt, model_profile=self.model_profile)
+
         return SanctionData(**extracted_data)
-    
+
     def extract_sanction_data_from_structured(self, structured_data: Dict) -> SanctionData:
         """
         Extract sanction letter data using LLM from structured data
         This method leverages the separation of tables (facilities) and paragraphs (conditions)
-        
+
         Args:
             structured_data: Dictionary with 'tables' and 'paragraphs' keys
-            
+
         Returns:
             SanctionData object with extracted information including multiple facilities
         """
         prompt = self._build_structured_extraction_prompt(structured_data)
-        extracted_data = self.llm_service.extract_structured_data(prompt)
+        extracted_data = self.llm_service.extract_structured_data(prompt, model_profile=self.model_profile)
         
         return SanctionData(**extracted_data)
     

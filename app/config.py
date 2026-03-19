@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     deepseek_small_model: str = Field("deepseek/deepseek-r1-distill-qwen-7b", alias="DEEPSEEK_SMALL_MODEL")
     qwen_small_model: str = Field("qwen/qwen2.5-7b-instruct", alias="QWEN_SMALL_MODEL")
     model_benchmark_runs: int = Field(1, alias="MODEL_BENCHMARK_RUNS")
+
+    # Local Model Configuration (Hugging Face / CPU inference)
+    local_model_name: str = Field("Qwen/Qwen2.5-1.5B-Instruct", alias="LOCAL_MODEL_NAME")
+    local_temperature: float = Field(0.7, alias="LOCAL_TEMPERATURE")
+    local_max_tokens: int = Field(2000, alias="LOCAL_MAX_TOKENS")
     
     # Alternative LLM Providers
     anthropic_api_key: Optional[str] = Field(None, alias="ANTHROPIC_API_KEY")
@@ -74,6 +79,8 @@ class Settings(BaseSettings):
             return self.validate_gemini_key()
         elif self.llm_provider in ["openai", "openrouter"]:
             return self.validate_openai_key()
+        elif self.llm_provider == "local":
+            return True  # No API key needed for local models
         return False
     
     def is_using_openrouter(self) -> bool:
