@@ -11,7 +11,12 @@ Pipeline
 6. Return results.
 """
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
+from datetime import datetime
+import json
+import zipfile
+import uuid
+import shutil
 
 from app.extraction.docx_parser import DocxParser
 from app.extraction.pdf_parser import PDFParser
@@ -19,6 +24,7 @@ from app.extraction.llm_extractor import LLMExtractor
 from app.services.rule_engine import RuleEngine
 from app.utils.docx_generator import DocxGenerator
 from app.schemas.sanction_schema import SanctionData
+from app.utils.create_templates import main as create_templates_main
 
 
 class DocumentService:
@@ -30,6 +36,10 @@ class DocumentService:
         self.llm_extractor = LLMExtractor()   # defaults to "existing" = Gemini
         self.rule_engine = RuleEngine()
         self.docx_generator = DocxGenerator()
+        self.output_dir = Path(self.docx_generator.output_dir)
+        self.template_dir = Path(self.docx_generator.template_dir)
+        self.sessions_dir = self.output_dir / "sessions"
+        self.sessions_dir.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------
     # Entry points
@@ -72,8 +82,47 @@ class DocumentService:
         return await self._run_pipeline(sanction_data)
 
     # Keep old method name for backward compatibility with existing routes
-    async def process_sanction_letter(self, pdf_content: bytes) -> Dict:
-        return await self.process_sanction_letter_pdf(pdf_content)
+    async def process_sanction_letter(self, file_content: bytes, filename: str) -> Dict:
+        """
+        Process a sanction letter uploaded as bytes.
+        Supports both PDF and DOCX files.
+        """
+        if filename.lower().endswith(".pdf"):
+            return await self.process_sanction_letter_pdf(file_content)
+        elif filename.lower().endswith(".docx"):
+            return await self.process_sanction_letter_docx(file_content, filename)
+        else:
+            return {"success": False, "error": "Unsupported file type. Please upload a .docx or .pdf file."}
+
+    async def process_sanction_letter_and_bundle(self, file_content: bytes, filename: str) -> Dict:
+        """
+        Process a sanction letter and return a bundled zip of generated docs.
+        """
+        result = await self.process_sanction_letter(file_content, filename)
+        if not result.get("success"):
+            return result
+
+        bundle_path = self._create_bundle(result)
+        result["bundle_path"] = str(bundle_path)
+        return result
+
+    async def process_sanction_letter_session(self, file_content: bytes, filename: str) -> Dict:
+        """
+        Process a sanction letter and persist generated documents in a session.
+
+        Returns a session payload with document IDs and download URLs.
+        """
+        result = await self.process_sanction_letter(file_content, filename)
+        if not result.get("success"):
+            return result
+
+        session_payload = self._create_session(result)
+        return {
+            "success": True,
+            "session": session_payload,
+            "sanction_data": result.get("sanction_data"),
+            "required_documents": result.get("required_documents"),
+        }
 
     # ------------------------------------------------------------------
     # Shared pipeline
@@ -81,6 +130,8 @@ class DocumentService:
 
     async def _run_pipeline(self, sanction_data: SanctionData) -> Dict:
         """Validate → determine docs → generate docs."""
+
+        self._ensure_templates()
 
         # Step 3: Validate
         validation = self.rule_engine.validate_sanction_data(sanction_data)
@@ -105,3 +156,95 @@ class DocumentService:
             "generated_files": generated,
             "total_generated": len(all_paths),
         }
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _ensure_templates(self) -> None:
+        """Create starter templates if none exist."""
+        docx_files = list(self.template_dir.glob("*.docx"))
+        if docx_files:
+            return
+        create_templates_main()
+
+    def _create_bundle(self, result: Dict) -> Path:
+        """Bundle generated documents and metadata into a zip file."""
+        generated_files = result.get("generated_files", {})
+        all_paths: List[str] = [p for paths in generated_files.values() for p in paths]
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        bundle_name = f"generated_documents_{timestamp}.zip"
+        bundle_path = self.output_dir / bundle_name
+
+        sanction_data = result.get("sanction_data", {})
+        required_docs = result.get("required_documents", {})
+
+        sanction_json = self.output_dir / f"sanction_data_{timestamp}.json"
+        required_json = self.output_dir / f"required_documents_{timestamp}.json"
+
+        with open(sanction_json, "w", encoding="utf-8") as f:
+            json.dump(sanction_data, f, indent=2, ensure_ascii=False, default=str)
+        with open(required_json, "w", encoding="utf-8") as f:
+            json.dump(required_docs, f, indent=2, ensure_ascii=False, default=str)
+
+        with zipfile.ZipFile(bundle_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for file_path in all_paths:
+                path = Path(file_path)
+                if path.exists():
+                    zf.write(path, arcname=path.name)
+            zf.write(sanction_json, arcname=sanction_json.name)
+            zf.write(required_json, arcname=required_json.name)
+
+        return bundle_path
+
+    def _create_session(self, result: Dict) -> Dict:
+        """Persist generated files under a session folder and return metadata."""
+        generated_files = result.get("generated_files", {})
+        all_paths: List[str] = [p for paths in generated_files.values() for p in paths]
+
+        session_id = uuid.uuid4().hex
+        session_dir = self.sessions_dir / session_id
+        session_dir.mkdir(parents=True, exist_ok=True)
+
+        documents = []
+        for file_path in all_paths:
+            src = Path(file_path)
+            if not src.exists():
+                continue
+            doc_id = uuid.uuid4().hex
+            dest_name = f"{doc_id}_{src.name}"
+            dest = session_dir / dest_name
+            shutil.copyfile(src, dest)
+            documents.append({
+                "id": doc_id,
+                "name": src.name,
+                "path": str(dest),
+            })
+
+        session_payload = {
+            "id": session_id,
+            "documents": documents,
+        }
+        self._write_session_manifest(session_dir, session_payload)
+        return session_payload
+
+    def _write_session_manifest(self, session_dir: Path, session_payload: Dict) -> None:
+        manifest_path = session_dir / "manifest.json"
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(session_payload, f, indent=2, ensure_ascii=False, default=str)
+
+    def load_session_manifest(self, session_id: str) -> Dict:
+        session_dir = self.sessions_dir / session_id
+        manifest_path = session_dir / "manifest.json"
+        if not manifest_path.exists():
+            return {}
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    def get_session_document_path(self, session_id: str, doc_id: str) -> Path:
+        manifest = self.load_session_manifest(session_id)
+        for doc in manifest.get("documents", []):
+            if doc.get("id") == doc_id:
+                return Path(doc.get("path"))
+        return Path()

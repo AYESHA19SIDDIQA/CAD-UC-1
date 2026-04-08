@@ -144,8 +144,8 @@ def main():
     print("TESTING DOCUMENT EXTRACTION")
     print("="*80)
     
-    # Check for samples directory
-    samples_dir = r"c:\Users\hp\Desktop\BM_stuff\CAD_01\document_generator\app\samples"
+    # Check for samples directory (repo-relative)
+    samples_dir = Path(__file__).resolve().parents[1] / "samples"
     
     if os.path.exists(samples_dir):
         print(f"\nScanning samples directory: {samples_dir}")
@@ -159,9 +159,9 @@ def main():
         print(f"Samples directory not found: {samples_dir}")
     
     # Also test the main document
-    main_doc = r"c:\Users\hp\Desktop\BM_stuff\CAD_01\Sanction Advice Review and Document Generator.docx"
+    main_doc = Path(__file__).resolve().parents[3] / "Sanction Advice Review and Document Generator.docx"
     if os.path.exists(main_doc):
-        test_file(main_doc)
+        test_file(str(main_doc))
 
 if __name__ == "__main__":
     main()

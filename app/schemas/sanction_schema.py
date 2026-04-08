@@ -13,6 +13,7 @@ class FacilityData(BaseModel):
     facility_type: str = Field(..., description="Type of facility (e.g., Murabaha, Musharaka) – normalized")
     existing_limit: Optional[str] = Field(None, description="Existing limit amount as text (e.g., '50.00')")
     approved_limit: str = Field(..., description="New approved/sanctioned amount (as text with currency)")
+    approved_limit_words: Optional[str] = Field(None, description="Approved limit amount in words (e.g., 'Fifty Million Rupees')")
     increase_decrease: Optional[str] = Field(None, description="Increase or decrease amount (e.g., '-', '+5.00')")
     currency: str = Field(default="PKR", description="Currency code")
     profit_rate: str = Field(..., description="Profit/commission rate details (as text, may include percentages and notes)")
@@ -44,6 +45,7 @@ class FacilityData(BaseModel):
                 "facility_type": "LC",
                 "existing_limit": "50.00",
                 "approved_limit": "50.00",
+                "approved_limit_words": "Fifty Million Rupees",
                 "increase_decrease": "-",
                 "currency": "PKR",
                 "profit_rate": "85% Commission on opening, 75% Commission on retirement, PAD: K+3%",
@@ -90,6 +92,7 @@ class SanctionData(BaseModel):
                         "facility_type": "LC",
                         "existing_limit": "50.00",
                         "approved_limit": "50.00",
+                        "approved_limit_words": "Fifty Million Rupees",
                         "increase_decrease": "-",
                         "currency": "PKR",
                         "profit_rate": "85% Commission on opening, 75% Commission on retirement, PAD: K+3%",
@@ -106,6 +109,7 @@ class SanctionData(BaseModel):
                         "facility_type": "LC",
                         "existing_limit": "",
                         "approved_limit": "50.00",
+                        "approved_limit_words": "Fifty Million Rupees",
                         "increase_decrease": "",
                         "currency": "PKR",
                         "profit_rate": "85% Commission on opening, 75% Commission on retirement, APSOC",

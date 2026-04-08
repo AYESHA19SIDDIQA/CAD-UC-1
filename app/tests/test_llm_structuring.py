@@ -4,6 +4,7 @@ Use LLM to structure the raw extracted text from sanction advice
 import os
 import sys
 import json
+from pathlib import Path
 from pprint import pprint
 
 # Add parent directory to path
@@ -146,15 +147,15 @@ def structure_with_regex(raw_text):
 def main():
     """Main function to demonstrate structuring raw extraction"""
     
-    # Path to extracted file
-    extracted_file = r"c:\Users\hp\Desktop\BM_stuff\CAD_01\document_generator\app\samples\Sanction Advice Word Global Technologies Services-2.doc_extracted.txt"
+    # Path to extracted file (repo-relative)
+    extracted_file = Path(__file__).resolve().parents[1] / "samples" / "Sanction Advice Word Global Technologies Services-2.doc_extracted.txt"
     
     if not os.path.exists(extracted_file):
         print(f"Error: Extracted file not found: {extracted_file}")
         return
     
     # 1. Show raw extraction
-    raw_text = show_raw_extraction(extracted_file)
+    raw_text = show_raw_extraction(str(extracted_file))
     
     print(f"\nRaw text length: {len(raw_text)} characters")
     print("As you can see, it's very messy with tables, line breaks, etc.\n")
@@ -171,7 +172,7 @@ def main():
         print(json.dumps(structured_data, indent=2))
         
         # Save structured data
-        output_file = extracted_file.replace("_extracted.txt", "_structured.json")
+        output_file = str(extracted_file).replace("_extracted.txt", "_structured.json")
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(structured_data, f, indent=2)
         print(f"\n✅ Structured data saved to: {output_file}")

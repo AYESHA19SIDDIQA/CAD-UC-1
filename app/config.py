@@ -35,10 +35,6 @@ class Settings(BaseSettings):
     local_temperature: float = Field(0.7, alias="LOCAL_TEMPERATURE")
     local_max_tokens: int = Field(2000, alias="LOCAL_MAX_TOKENS")
     
-    # Alternative LLM Providers
-    anthropic_api_key: Optional[str] = Field(None, alias="ANTHROPIC_API_KEY")
-    azure_openai_api_key: Optional[str] = Field(None, alias="AZURE_OPENAI_API_KEY")
-    azure_openai_endpoint: Optional[str] = Field(None, alias="AZURE_OPENAI_ENDPOINT")
     
     # Application Settings
     app_name: str = Field("Document Generator", alias="APP_NAME")

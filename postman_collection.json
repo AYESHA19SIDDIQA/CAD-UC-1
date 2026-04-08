@@ -1,0 +1,129 @@
+{
+  "info": {
+    "_postman_id": "9c7d6b50-2b6e-4b7a-9f5a-6b4a7d8a9c01",
+    "name": "Document Generator API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/health",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "health"]
+        }
+      }
+    },
+    {
+      "name": "Generate Session",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/generate-session",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "generate-session"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const json = pm.response.json();",
+              "  if (json.session && json.session.id) {",
+              "    pm.environment.set('session_id', json.session.id);",
+              "  }",
+              "  if (json.session && json.session.documents && json.session.documents.length > 0) {",
+              "    pm.environment.set('doc_id', json.session.documents[0].id);",
+              "  }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Download Document",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/sessions/{{session_id}}/documents/{{doc_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "sessions", "{{session_id}}", "documents", "{{doc_id}}"]
+        }
+      }
+    },
+    {
+      "name": "Upload Updated Document",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/sessions/{{session_id}}/documents/{{doc_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "sessions", "{{session_id}}", "documents", "{{doc_id}}"]
+        }
+      }
+    },
+    {
+      "name": "Generate Documents Zip",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/generate-documents-zip",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "generate-documents-zip"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "session_id",
+      "value": ""
+    },
+    {
+      "key": "doc_id",
+      "value": ""
+    }
+  ]
+}

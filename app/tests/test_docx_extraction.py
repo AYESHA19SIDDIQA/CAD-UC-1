@@ -3,6 +3,7 @@ Test script for extracting text from sample sanction documents
 """
 import sys
 import os
+from pathlib import Path
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -41,10 +42,10 @@ def test_single_file(parser, file_path):
 def main():
     """Test the DOCX parser on sample sanction advice documents"""
     
-    # Path to samples directory
-    samples_dir = r"c:\Users\hp\Desktop\BM_stuff\CAD_01\document_generator\app\samples"
+    # Path to samples directory (repo-relative)
+    samples_dir = Path(__file__).resolve().parents[1] / "samples"
     
-    if not os.path.exists(samples_dir):
+    if not samples_dir.exists():
         print(f"Error: Samples directory not found at {samples_dir}")
         return
     

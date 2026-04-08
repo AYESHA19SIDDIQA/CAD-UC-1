@@ -40,96 +40,21 @@ class RuleEngine:
                 ],
                 "max_tenor_months": 60,
             },
-            "Musharaka": {
-                "general_documents": [
-                    "Offer Letter",
-                    "Demand Promissory Note",
-                ],
-                "facility_specific_documents": [
-                    "Master Musharaka Agreement",
-                    "Musharaka Capital Contribution Agreement",
-                    "Profit and Loss Sharing Agreement",
-                    "Musharaka Repayment Schedule",
-                ],
-                "collateral_documents": [
-                    "Mortgage Deed Draft",
-                    "Memorandum of Title Deposits",
-                    "Hypothecation Agreement",
-                    "Pledge Agreement",
-                ],
-                "max_tenor_months": 120,
-            },
-            "Ijarah": {
-                "general_documents": [
-                    "Offer Letter",
-                    "Demand Promissory Note",
-                ],
-                "facility_specific_documents": [
-                    "Master Ijarah Agreement",
-                    "Asset Lease Agreement",
-                    "Asset Schedule",
-                    "Ijarah Rental Schedule",
-                ],
-                "collateral_documents": [
-                    "Mortgage Deed Draft",
-                    "Memorandum of Title Deposits",
-                    "Security Deposit Agreement",
-                ],
-                "max_tenor_months": 84,
-            },
-            "Diminishing Musharaka": {
-                "general_documents": [
-                    "Offer Letter",
-                    "Demand Promissory Note",
-                ],
-                "facility_specific_documents": [
-                    "Master Diminishing Musharaka Agreement",
-                    "Purchase Undertaking",
-                    "Sale Undertaking",
-                    "Unit Redemption Schedule",
-                ],
-                "collateral_documents": [
-                    "Mortgage Deed Draft",
-                    "Memorandum of Title Deposits",
-                    "Hypothecation Agreement",
-                ],
-                "max_tenor_months": 240,
-            },
             "LC": {
                 "general_documents": [
                     "Offer Letter",
                     "Demand Promissory Note",
                 ],
                 "facility_specific_documents": [
-                    "Letter of Credit Application",
-                    "LC Master Agreement",
-                    "Trust Receipt Agreement",
-                    "MSFA Agreement",
+                    "Letter of Set off",
+                    "Letter of Lien",
+                    "Agreement For Issuance Of Letter of Guarantee",
+                    
                 ],
-                "collateral_documents": [
-                    "Letter of Lien and Set-off",
-                    "Lien over Import Documents",
-                    "Personal Guarantee",
-                    "Cash Margin Agreement",
+                "collateral_documents": ["Mortgage Deed Draft",
+                    "Memorandum of Deposit of Title Deed",
                 ],
                 "max_tenor_months": 12,
-            },
-            "Bank Guarantee": {
-                "general_documents": [
-                    "Offer Letter",
-                    "Demand Promissory Note",
-                ],
-                "facility_specific_documents": [
-                    "Bank Guarantee Application",
-                    "Counter Guarantee Agreement",
-                    "Indemnity Agreement",
-                ],
-                "collateral_documents": [
-                    "Cash Margin Agreement",
-                    "Lien on Fixed Deposits",
-                    "Counter Guarantee",
-                ],
-                "max_tenor_months": 36,
             },
         }
 

@@ -29,6 +29,7 @@ Facility tokens (for single-facility documents or when iterating)
 {{FACILITY_TYPE}}        e.g. "LC"
 {{NATURE_OF_LIMIT}}      Full nature-of-limit text
 {{APPROVED_LIMIT}}       Approved limit amount
+{{APPROVED_LIMIT_WORDS}} Approved limit in words
 {{EXISTING_LIMIT}}       Existing limit amount
 {{CURRENCY}}             Currency code
 {{PROFIT_RATE}}          Profit / commission rate
@@ -194,30 +195,46 @@ class DocxGenerator:
         sanction_data: SanctionData,
         facility: Optional[FacilityData],
     ) -> Dict[str, str]:
-        """Build the token → value map for a document."""
+        """
+        Build the complete token -> value map for a document.
+
+        Every placeholder listed in the template reference is handled here.
+        Unknown tokens in a template are left as-is (they will not crash).
+        """
         today = datetime.now().strftime("%B %d, %Y")
 
+        # SanctionData tokens (same value across all docs for one sanction)
         replacements = {
-            "{{CUSTOMER_NAME}}":    sanction_data.customer_name or "",
-            "{{APPROVAL_NO}}":      sanction_data.approval_no or "",
-            "{{SANCTION_DATE}}":    str(sanction_data.sanction_date or ""),
-            "{{ICRR}}":             sanction_data.icrr or "",
-            "{{BUSINESS_SEGMENT}}": sanction_data.business_segment or "",
+            "{{CUSTOMER_NAME}}":     sanction_data.customer_name or "",
+            "{{APPROVAL_NO}}":       sanction_data.approval_no or "",
+            "{{SANCTION_DATE}}":     str(sanction_data.sanction_date or ""),
+            "{{PROPOSAL_TYPE}}":     sanction_data.proposal_type or "",
+            "{{APPROVAL_LEVEL}}":    sanction_data.approval_level or "",
+            "{{ICRR}}":              sanction_data.icrr or "",
+            "{{BUSINESS_SEGMENT}}":  sanction_data.business_segment or "",
             "{{CUSTOMER_LOCATION}}": sanction_data.customer_location or "",
-            "{{DATE}}":             today,
+            "{{ORIGINATING_UNIT}}":  sanction_data.originating_unit_region or "",
+            "{{DATE}}":              today,
         }
 
+        # FacilityData tokens (per-facility, used in facility-specific docs)
         if facility:
             replacements.update({
-                "{{FACILITY_TYPE}}":   facility.facility_type or "",
-                "{{NATURE_OF_LIMIT}}": facility.nature_of_limit or "",
-                "{{APPROVED_LIMIT}}":  str(facility.approved_limit or ""),
-                "{{EXISTING_LIMIT}}":  str(facility.existing_limit or ""),
-                "{{CURRENCY}}":        facility.currency or "PKR",
-                "{{PROFIT_RATE}}":     facility.profit_rate or "",
-                "{{TENOR}}":           facility.tenor or "",
-                "{{SECURITY}}":        str(facility.security or ""),
-                "{{PURPOSE}}":         facility.purpose or "",
+                "{{S_NO}}":              str(facility.s_no or ""),
+                "{{FACILITY_TYPE}}":     facility.facility_type or "",
+                "{{NATURE_OF_LIMIT}}":   facility.nature_of_limit or "",
+                "{{APPROVED_LIMIT}}":    str(facility.approved_limit or ""),
+                "{{APPROVED_LIMIT_WORDS}}": str(getattr(facility, "approved_limit_words", "") or ""),
+                "{{EXISTING_LIMIT}}":    str(facility.existing_limit or ""),
+                "{{INCREASE_DECREASE}}": str(facility.increase_decrease or ""),
+                "{{CURRENCY}}":          facility.currency or "PKR",
+                "{{PROFIT_RATE}}":       facility.profit_rate or "",
+                "{{TENOR}}":             facility.tenor or "",
+                "{{EXPIRY_REVIEW}}":     facility.expiry_review or "",
+                "{{PURPOSE}}":           facility.purpose or "",
+                "{{SECURITY}}":          str(facility.security or ""),
+                "{{IS_SUB_LIMIT}}":      "Yes" if facility.is_sub_limit else "No",
+                "{{PARENT_FACILITY}}":   str(facility.parent_facility_s_no or ""),
             })
 
         return replacements
