@@ -1,55 +1,37 @@
 """
-Main FastAPI application entry point and CLI pipeline runner.
-"""
-import argparse
-import asyncio
-from pathlib import Path
+FastAPI application entry point.
 
+Run with:
+    uvicorn app.main:app --reload --port 8000
+
+Then open:
+    http://localhost:8000/docs   ← interactive API docs (test here or in Postman)
+"""
 from fastapi import FastAPI
-from app.api import routes
-from app.services.document_service import DocumentService
+from fastapi.middleware.cors import CORSMiddleware
+from app.api.routes import router
 
 app = FastAPI(
     title="Document Generator API",
-    description="API for generating documents from sanction letters",
-    version="1.0.0"
+    description="Processes Islamic banking sanction letters and generates required charge documents.",
+    version="1.0.0",
 )
 
-# Include API routes
-app.include_router(routes.router)
+# Allow the frontend (running on a different port/domain) to call this API.
+# During development, allow everything. Tighten this before going to production.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],        # In production: replace with ["https://yourfrontend.com"]
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(router)
 
 @app.get("/")
-async def root():
-    return {"message": "Document Generator API is running"}
-
-
-async def _run_pipeline(file_path: Path) -> int:
-    service = DocumentService()
-    if not file_path.exists():
-        print(f"❌ File not found: {file_path}")
-        return 1
-
-    file_bytes = file_path.read_bytes()
-    result = await service.process_sanction_letter_and_bundle(file_bytes, file_path.name)
-
-    if not result.get("success"):
-        print(f"❌ Processing failed: {result.get('error', 'Unknown error')}")
-        return 1
-
-    print("✅ Processing complete")
-    print(f"Bundle: {result.get('bundle_path')}")
-    print(f"Total generated: {result.get('total_generated')}")
-    return 0
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run document generation pipeline")
-    parser.add_argument("--file", type=str, help="Path to sanction document (.docx or .pdf)")
-    parser.add_argument("--serve", action="store_true", help="Start the API server")
-    args = parser.parse_args()
-
-    if args.file:
-        raise SystemExit(asyncio.run(_run_pipeline(Path(args.file))))
-
-    if args.serve or not args.file:
-        import uvicorn
-        uvicorn.run(app, host="0.0.0.0", port=8000)
+def root():
+    return {
+        "message": "Document Generator API is running.",
+        "docs": "http://localhost:8000/docs",
+        "health": "http://localhost:8000/api/v1/health",
+    }

@@ -256,3 +256,34 @@ class DocxParser:
                     full_text.append(" | ".join(row_text))
         
         return "\n".join(full_text)
+# ADD THIS METHOD to DocxParser in app/extraction/docx_parser.py
+# It's the same as extract_structured_data() but reads from bytes instead of a file path.
+# The API receives the file as bytes (not a saved path), so this is needed.
+
+    def extract_structured_data_from_bytes(self, docx_content: bytes) -> dict:
+        """
+        Extract structured data from DOCX bytes (used by the API route).
+        Identical to extract_structured_data() but takes bytes instead of a file path.
+        """
+        from io import BytesIO
+        doc = Document(BytesIO(docx_content))
+
+        paragraphs = [
+            para.text.strip()
+            for para in doc.paragraphs
+            if para.text.strip()
+        ]
+
+        tables_data = []
+        for table in doc.tables:
+            table_data = []
+            for row in table.rows:
+                row_data = [cell.text.strip() for cell in row.cells]
+                table_data.append(row_data)
+            tables_data.append(table_data)
+
+        return {
+            "paragraphs": paragraphs,
+            "tables": tables_data,
+            "full_text": self.extract_from_bytes(docx_content),
+        }

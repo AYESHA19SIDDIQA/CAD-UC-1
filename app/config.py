@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # OpenAI/OpenRouter Configuration
     openai_api_key: Optional[str] = Field(None, alias="OPENAI_API_KEY")
     openai_base_url: Optional[str] = Field(None, alias="OPENAI_BASE_URL")  # For OpenRouter or Azure
-    openai_model: str = Field("deepseek/deepseek-v3", alias="OPENAI_MODEL")
+    openai_model: str = Field("openai/gpt-5.2", alias="OPENAI_MODEL")
     openai_temperature: float = Field(0, alias="OPENAI_TEMPERATURE")
     openai_max_tokens: int = Field(2000, alias="OPENAI_MAX_TOKENS")
     deepseek_small_model: str = Field("deepseek/deepseek-r1-distill-qwen-7b", alias="DEEPSEEK_SMALL_MODEL")
